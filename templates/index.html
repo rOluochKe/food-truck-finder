@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Food Truck Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src='https://api.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.css' rel='stylesheet' />
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { position: absolute; top: 40px; bottom: 0; width: 100%; }
+        .search-form { position: absolute; top: 0; left: 0; right: 0; background-color: #fff; padding: 10px; z-index: 1; }
+    </style>
+</head>
+<body>
+    <div class="search-form">
+        <form id="searchForm" onsubmit="searchFoodTrucks(); return false;">
+            <input type="text" id="searchInput" placeholder="Enter a location">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+    <div id='map'></div>
+
+    <script>
+        mapboxgl.accessToken = '{{ mapbox_access_token }}';
+
+        var map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v11',
+            center: [-122.4194, 37.7749],
+            zoom: 12
+        });
+
+        var markers = [];
+
+        // Function to add markers for food trucks on the map
+        function addFoodTruckMarkers(foodTrucks) {
+            // Remove existing markers
+            markers.forEach(function(marker) {
+                marker.remove();
+            });
+
+            markers = [];
+
+            foodTrucks.forEach(function(truck) {
+                var el = document.createElement('div');
+                el.className = 'marker';
+
+                var marker = new mapboxgl.Marker(el)
+                    .setLngLat([truck.lng, truck.lat])
+                    .setPopup(new mapboxgl.Popup().setHTML('<h3>' + truck.name + '</h3><p>' + truck.address + '</p>'))
+                    .addTo(map);
+
+                markers.push(marker);
+            });
+        }
+
+        // Function to fetch and display food trucks on the map
+        function displayFoodTrucks(lat, lng) {
+            fetch('/food-trucks?lat=' + lat + '&lng=' + lng)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
+                    if (data.food_trucks) {
+                        addFoodTruckMarkers(data.food_trucks);
+
+                        // Fit the map to the markers
+                        var bounds = new mapboxgl.LngLatBounds();
+                        markers.forEach(function(marker) {
+                            bounds.extend(marker.getLngLat());
+                        });
+                        map.fitBounds(bounds, { padding: 50 });
+                    }
+                })
+                .catch(function(error) {
+                    console.log('Error:', error);
+                });
+        }
+
+        // Function to search for food trucks based on user input
+        function searchFoodTrucks() {
+          var location = document.getElementById('searchInput').value;
+
+          if (location.trim() !== '') {
+              mapboxgl.geocodeForward(location, function(err, res) {
+                  if (!err && res && res.features && res.features.length > 0) {
+                      var coordinates = res.features[0].center;
+                      var lat = coordinates[1];
+                      var lng = coordinates[0];
+
+                      // Center the map on the searched location
+                      map.flyTo({
+                          center: [lng, lat],
+                          zoom: 12
+                      });
+
+                      // Display food trucks near the searched location
+                      displayFoodTrucks(lat, lng);
+                  }
+              });
+          }
+        }
+
+        // Call the function to display food trucks near the current location when the page loads
+        navigator.geolocation.getCurrentPosition(function(position) {
+            var lat = position.coords.latitude;
+            var lng = position.coords.longitude;
+
+            displayFoodTrucks(lat, lng);
+        });
+    </script>
+</body>
+</html>
